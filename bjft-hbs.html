@@ -2,35 +2,23 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kloud Of Trust</title>
+    <title>Basic WebSocket Test</title>
     <link rel="icon" href="/favicon.ico" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <p>Dear Reader,</p>
-    <p>
-Welcome to Kloud Of Trust - the cloud-native, role-based organization of coders
-and testers. At present, it is my hobby project comprising two more projects:
-<ul>
-  <li>Cloudflare Job Fair; and</li>
-  <li>Stellar Help Exchange.</li>
-</ul>
-    </p><p>
-Cloudflare Job Fair matches Job Agents (digital content producers) with Job Users
-(digital content consumers) for a given job and facilitates the data flow between
-them. Stellar Help Exchange provides an equitable marketplace, where users pay agents
-for jobs done - or get full refund otherwise.
-    </p><p>
-I believe these are the first two steps needed to make the Internet a better place
-for you and me. So, if you are a coder or a tester - join me! As a coder, you'll be
-rewarded by the users of your code. As a tester, you'll get paid for your resources.
-    </p><p>
-Cheers,
-    </p><p>
-Alec Missine<br/>
-didalik.aim@gmail.com
-<hr/>
-    </p>
+    <h3>Basic WebSocket Test</h3>
+This WebSocket client runs in a browser. Two more clients run locally in Node JS.
+All clients share the same code and connect to CF DO WebSocket Server with Hibernate.
+Each client sends 3 messages to the server. The server broadcasts whatever a client
+sends it to all other clients and closes a client's connection having sent 6 messages
+to it.</p>
+<p>
+Having sent the first message, a client waits long enough for the server side to
+hibernate on the connection. A client can still send a message after the server
+closes its connection - the server's <i>ctx.getWebSockets()</i> call returns clients
+with <i>readyState == 2</i> (CLOSING).
+</p><hr/>
 <p id='content1'>
 </p>
   </body>

@@ -2,37 +2,25 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kloud Of Trust</title>
+    <title>Basic WebSocket Test</title>
     <link rel="icon" href="/favicon.ico" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <p>Dear Reader,</p>
-    <p>
-Welcome to Kloud Of Trust - the cloud-native, role-based organization of coders
-and testers. At present, it is my hobby project comprising two more projects:
-<ul>
-  <li>Cloudflare Job Fair; and</li>
-  <li>Stellar Help Exchange.</li>
-</ul>
-    </p><p>
-Cloudflare Job Fair matches Job Agents (digital content producers) with Job Users
-(digital content consumers) for a given job and facilitates the data flow between
-them. Stellar Help Exchange provides an equitable marketplace, where users pay agents
-for jobs done - or get full refund otherwise.
-    </p><p>
-I believe these are the first two steps needed to make the Internet a better place
-for you and me. So, if you are a coder or a tester - join me! As a coder, you'll be
-rewarded by the users of your code. As a tester, you'll get paid for your resources.
-    </p><p>
-Cheers,
-    </p><p>
-Alec Missine<br/>
-didalik.aim@gmail.com
-<hr/>
-    </p>
+    <h3>Basic WebSocket Test</h3>
+This WebSocket client runs in a browser. Two more clients run locally in Node JS.
+All clients share the same code and connect to CF DO WebSocket Server with Hibernate.
+Each client sends 3 messages to the server. The server broadcasts whatever a client
+sends it to all other clients and closes a client's connection having sent 6 messages
+to it.</p>
+<p>
+Having sent the first message, a client waits long enough for the server side to
+hibernate on the connection. A client can still send a message after the server
+closes its connection - the server's <i>ctx.getWebSockets()</i> call returns clients
+with <i>readyState == 2</i> (CLOSING).
+</p><hr/>
 <p id='content1'>
 </p>
   </body>
   <script type="text/javascript">
-document.addEventListener("keydown",c);var n={};function c(e){e.ctrlKey&&e.key=="c"&&t("You pressed Ctrl-C.")}function t(...e){for(let r of e)n.content.innerHTML+=`${r}<br/>`}function o(e){Object.assign(n,e)}o({content:document.getElementById("content1")});t(`Delivered ${location} on ${Date()} to YOUR_IP_ADDRESS`,"<hr/>");
+var A=Object.create;var $=Object.defineProperty;var T=Object.getOwnPropertyDescriptor;var C=Object.getOwnPropertyNames;var H=Object.getPrototypeOf,L=Object.prototype.hasOwnProperty;var N=(e,t)=>()=>(t||e((t={exports:{}}).exports,t),t.exports);var R=(e,t,s,o)=>{if(t&&typeof t=="object"||typeof t=="function")for(let c of C(t))!L.call(e,c)&&c!==s&&$(e,c,{get:()=>t[c],enumerable:!(o=T(t,c))||o.enumerable});return e};var W=(e,t,s)=>(s=e!=null?A(H(e)):{},R(t||!e||!e.__esModule?$(s,"default",{value:e,enumerable:!0}):s,e));var O=N((Y,k)=>{"use strict";k.exports=function(){throw new Error("ws does not work in the browser. Browser clients must use the native WebSocket object")}});function g(e,t={}){let s=!0;try{s=Object.is(global,void 0)}catch(i){console.error(i)}let o,c=0,w=[],y=[],p={},S=i=>{let l=JSON.parse(s?i.data:i.toString()),n=l?.message,r={...n?.[0]==null&&n,...l};p[l?.type??n?.type]?.map(a=>a(r)),l?.type||p.message?.map(a=>a(r)),y.map(([a,h])=>a(r)&&h(r))},v=i=>(w.splice(0).map(l=>o?.send(l)),p.open?.map(l=>l()),c&&o?.close()),x=i=>(c=0,o=null,p.close?.map(l=>l(i))),_=i=>(p.close?.map(l=>l(i)),o?.readyState==1?o.close():c=1),f=()=>(o||(o=e,s?(o.onmessage=S,o.onopen=v,o.onclose=x,o.onerror=_):(o.on("message",S),o.on("open",v),o.on("close",x),o.on("error",_))),d),d=new Proxy(f,{get:(i,l)=>({open:f,close:()=>(o?.readyState==1?o.close():c=1,d),push:(n,r)=>(c=1,d.send(n,r)),send:(n,r)=>(n=JSON.stringify(n),n=r?""+r+n:n,o?.readyState==1?(o.send(n),d):(w.push(n),f())),on:(n,r)=>(r&&(n?.[0]?(p[n]??=[]).push(r):y.push([n,r])),f()),remove:(n,r,a=p[n],h=a?.indexOf(r)??-1)=>(~h&&a?.splice(h,1),f())})[l]});return d}var J=W(O(),1),u={};function E(e,t,s=null){if(console.log(u.me,"received:",t),s&&s(t),u.sentCount??=0,++u.sentCount>2)return;let o=`Hello, ${t.sender}, nice to meet you! This is ${u.me}.`;setTimeout(c=>(e.send(o),s&&s(o)),t.clientSleep)}document.addEventListener("keydown",j);var D={};function j(e){e.ctrlKey&&e.key=="c"&&m("You pressed Ctrl-C.")}function m(...e){for(let t of e)D.content.innerHTML+=`${t}<br/>`}function I(e){Object.assign(D,e)}I({content:document.getElementById("content1")});m(`Delivered ${location} on ${Date()} to YOUR_IP_ADDRESS`,"<hr/>");u.me="Ann";var P="Hi there! I'm Ann.",B=e=>typeof e=="string"?m(`<h4 style='text-align: right'>${e}</h4>`):m(e.message),b=g(new WebSocket(location.toString().replace("http","ws"))).on("error",console.error).on("message",e=>E(b,e,B)).on("close",e=>{console.log(u.me,"close data",e),m("<h3 style='text-align: center'>Test PASSED</h3>")}).send(P);setInterval(b.open,1e4);m(`<h4 style='text-align: right'>${P}</h4>`);
