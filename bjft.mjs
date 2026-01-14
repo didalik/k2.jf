@@ -12,19 +12,16 @@ put(`Delivered ${location} on ${Date()} to YOUR_IP_ADDRESS`, '<hr/>')
   
 configuration.me = 'Ann' // {{{1
 generate_keypair.call(crypto.subtle).then(keys => {
-  const iss = {
-    name: configuration.me,
-    uuid: 'UUID',
-  }
   const aud = 'bjft/echo'
-  const sk = keys.split(' ')[0]
+  const [sk, pk] = keys.split(' ')
+  const iss = { name: configuration.me, pk, uuid: 'UUID', }
   let params = new URLSearchParams(`aud=${aud}`)
   params.append('iss', encodeURIComponent(JSON.stringify(iss)))
   params.append('sk', encodeURIComponent(sk))
   wsURL.search = params
   console.log('wsURL', wsURL)
 
-  return JobRequest(JSON.stringify(iss), aud, sk);
+  return JobRequest(JSON.stringify(iss), aud, sk, pk);
 }).then(jr => {
   const ws = connection(new WebSocket(wsURL)).
     on('error', console.error).
