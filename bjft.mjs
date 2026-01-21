@@ -21,7 +21,7 @@ generate_keypair.call(crypto.subtle).then(keys => {
   wsURL.search = params
   console.log('wsURL', wsURL)
 
-  return JobRequest(JSON.stringify(iss), aud, sk, pk);
+  return JobRequest(JSON.stringify(iss), aud, sk);
 }).then(jr => {
   const ws = connection(new WebSocket(wsURL)).
     on('error', console.error).
