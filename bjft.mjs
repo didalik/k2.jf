@@ -1,6 +1,6 @@
 import { JobRequest, configuration, bjft_onmessage, } from '../local/lib/util.mjs' // {{{1
 import { put, reset, } from './lib/util.mjs'
-import { generate_keypair, verifyPayload, } from '../lib/util.mjs'
+import { JWT, generate_keypair, verifyPayload, } from '../lib/util.mjs'
 import { connection, } from '../../lib/util.mjs'
 
 const State = { // {{{1
@@ -13,14 +13,22 @@ const State = { // {{{1
       try {
         return verifyPayload(event.message).then(payload => {
           console.log(configuration.me, 'context', context, 'payload', payload)
-        });
+          context.attachment.match = payload
+          context.state = State.Confirming
+          context.attachment.state = State.CONFIRMING
+          return new JWT(payload.sub + ' CONFIRMED').setIssuer(
+            context.attachment.iss, context.attachment.sk
+          ).sign();
+        }).then(c => context.ws.send(c));
       } catch(err) { console.error('UNEXPECTED err', err) }
     }
   },
   Confirming: { // {{{2 
     handle: (context, event) => {
       try {
-
+        return verifyPayload(event.message).then(payload => {
+          console.log(configuration.me, 'context', context, 'payload', payload)
+        });
       } catch(err) { throw Error('UNEXPECTED err', err) }
     }
   },
@@ -45,6 +53,7 @@ generate_keypair.call(crypto.subtle).then(keys => { // {{{2
   const aud = 'bjft/echo'
   const [sk, pk] = keys.split(' ')
   const iss = { name: configuration.me, pk, uuid: 'UUID', }
+  configuration.attachment = { iss, sk, state: State.MATCHING }
   let params = new URLSearchParams(`aud=${aud}`)
   params.append('iss', encodeURIComponent(JSON.stringify(iss)))
   params.append('sk', encodeURIComponent(sk))
@@ -56,7 +65,7 @@ generate_keypair.call(crypto.subtle).then(keys => { // {{{2
   const ws = connection(new WebSocket(wsURL)).
     on('error', console.error).
     on('message', mobj => bjft_onmessage(
-      ws, mobj, Context (ws, { state: State.MATCHING })
+      ws, mobj, Context(ws, configuration.attachment)
     )).
     on('close', data => {
       console.log(configuration.me, 'close data', data)
