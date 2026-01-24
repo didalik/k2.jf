@@ -16,10 +16,13 @@ const State = { // {{{1
           context.attachment.match = payload
           context.state = State.Confirming
           context.attachment.state = State.CONFIRMING
+          if (payload.sub.endsWith(' CONFIRMED')) { // TODO ' DENIED'
+            return Promise.resolve(null);
+          }
           return new JWT(payload.sub + ' CONFIRMED').setIssuer(
             context.attachment.iss, context.attachment.sk
           ).sign();
-        }).then(c => context.ws.send(c));
+        }).then(c => c && context.ws.send(c));
       } catch(err) { console.error('UNEXPECTED err', err) }
     }
   },
