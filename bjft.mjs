@@ -1,4 +1,7 @@
-import { JobRequest, configuration, bjft_onmessage, } from '../local/lib/util.mjs' // {{{1
+import { // {{{1
+  Context,
+  JobRequest, configuration, bjft_onmessage, confirmingHandle, matchingHandle,
+} from '../local/lib/util.mjs' 
 import { put, reset, } from './lib/util.mjs'
 import { JWT, generate_keypair, verifyPayload, } from '../lib/util.mjs'
 import { connection, } from '../../lib/util.mjs'
@@ -8,37 +11,11 @@ const State = { // {{{1
   CONFIRMING: 2,
   CLOSING: 3,
 
-  Matching: { // {{{2
-    handle: (context, event) => {
-      try {
-        return verifyPayload(event.message).then(payload => {
-          console.log(configuration.me, 'context', context, 'payload', payload)
-          context.attachment.match = payload
-          context.state = State.Confirming
-          context.attachment.state = State.CONFIRMING
-          if (payload.sub.endsWith(' CONFIRMED')) { // TODO ' DENIED'
-            return Promise.resolve(null);
-          }
-          return new JWT(payload.sub + ' CONFIRMED').setIssuer(
-            context.attachment.iss, context.attachment.sk
-          ).sign();
-        }).then(c => c && context.ws.send(c));
-      } catch(err) { console.error('UNEXPECTED err', err) }
-    }
-  },
-  Confirming: { // {{{2 
-    handle: (context, event) => {
-      try {
-        return verifyPayload(event.message).then(payload => {
-          console.log(configuration.me, 'context', context, 'payload', payload)
-        });
-      } catch(err) { throw Error('UNEXPECTED err', err) }
-    }
-  },
+  Matching: { handle: matchingHandle },
+  Confirming: { handle: confirmingHandle },
   Closing: { // {{{2 
     handle: (context, event) => {
       try {
-
       } catch(err) { throw Error('UNEXPECTED err', err) }
     }
   }, // }}}2
@@ -77,15 +54,4 @@ generate_keypair.call(crypto.subtle).then(keys => { // {{{2
 
   setInterval(ws.open, 10000)                // auto-reconnect every 10s
 }) // }}}2
-
-function Context (ws, attachment) { // {{{1
-  let context = { ws, attachment }
-  switch (attachment.state) {
-    case State.MATCHING: return Object.assign(context, { state: State.Matching });
-    case State.CONFIRMING: return Object.assign(context, { state: State.Confirming });
-    case State.RUNNING: return Object.assign(context, { state: State.Running });
-    case State.CLOSING: return Object.assign(context, { state: State.Closing });
-    default: throw Error('UNEXPECTED')
-  }
-}
 
