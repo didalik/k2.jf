@@ -42,15 +42,15 @@ generate_keypair.call(crypto.subtle).then(keys => { // {{{2
 
   return JobRequest(JSON.stringify(iss), aud, sk);
 }).then(jr => { // JobRequest {{{2
+  let context
   const ws = connection(new WebSocket(wsURL)).
     on('error', console.error).
-    on('message', mobj => bjft_onmessage(
-      ws, mobj, Context(ws, configuration.attachment)
-    )).
+    on('message', mobj => bjft_onmessage(ws, mobj, context)).
     on('close', data => {
       console.log(configuration.me, 'close data', data)
       put("<h3 style='text-align: center'>Test PASSED</h3>")
     }).send(jr)
+  context = Context(ws, configuration.attachment)
 
   setInterval(ws.open, 10000)                // auto-reconnect every 10s
 }) // }}}2
