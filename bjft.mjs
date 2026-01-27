@@ -8,11 +8,15 @@ import { connection, } from '../../lib/util.mjs'
 
 const State = { // {{{1
   MATCHING: 1,
-  CONFIRMING: 2,
-  CLOSING: 3,
-
-  Matching: { handle: matchingHandle },
-  Confirming: { handle: confirmingHandle },
+  Running: { // {{{2 
+    handle: (context, event) => {
+      try {
+        console.log('XA!',
+          configuration.me, 'context', context, 'configuration', configuration
+        )
+      } catch(err) { throw Error('UNEXPECTED err', err) }
+    }
+  },
   Closing: { // {{{2 
     handle: (context, event) => {
       try {
@@ -29,6 +33,7 @@ reset({ content: document.getElementById('content1'), }) // {{{1
 put(`Delivered ${location} on ${Date()} to YOUR_IP_ADDRESS`, '<hr/>')
   
 configuration.me = 'Ann' // {{{1
+configuration.State_Running_handle = State.Running.handle
 generate_keypair.call(crypto.subtle).then(keys => { // {{{2
   const aud = 'bjft/echo'
   const [sk, pk] = keys.split(' ')
