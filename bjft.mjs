@@ -6,14 +6,37 @@ import { put, reset, } from './lib/util.mjs'
 import { JWT, generate_keypair, verifyPayload, } from '../lib/util.mjs'
 import { connection, } from '../../lib/util.mjs'
 
+const out = m => typeof m == 'string' ? put( // {{{1
+  `<h4 style='text-align: right'>${m}</h4>`
+) : put(m.message)
+
+const text2echo = `Lorem ipsum dolor sit amet, consectetur adipiscing elit,<br/>
+sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad<br/>
+minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea<br/>
+commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit<br/>
+esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat<br/>
+non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.<br/>
+`
 const State = { // {{{1
   MATCHING: 1,
   Running: { // {{{2 
     handle: (context, event) => {
       try {
-        console.log('XA!',
-          configuration.me, 'context', context, 'configuration', configuration
-        )
+        if (event) {
+          verifyPayload(event.message).then(payload => {
+            console.log(configuration.me, 'context', context, 'payload', payload)
+            out({ message: `${payload.iss.name}:` })
+            out({ message: payload.sub })
+          });
+        } else {
+          new JWT(text2echo).
+            setIssuer(context.attachment.iss, context.attachment.sk).sign().
+            then(t => {
+              context.ws.send(t)
+              out(`${configuration.me}:`)
+              out(text2echo)
+            })
+        }
       } catch(err) { throw Error('UNEXPECTED err', err) }
     }
   },
@@ -25,9 +48,6 @@ const State = { // {{{1
   }, // }}}2
 }
 const wsURL = new URL(location.toString().replace('http', 'ws')) // {{{1
-const out = m => typeof m == 'string' ? put(
-  `<h4 style='text-align: right'>${m}</h4>`
-) : put(m.message)
 
 reset({ content: document.getElementById('content1'), }) // {{{1
 put(`Delivered ${location} on ${Date()} to YOUR_IP_ADDRESS`, '<hr/>')
