@@ -63,10 +63,10 @@ generate_keypair.call(crypto.subtle).then(keys => { // {{{2
   params.append('iss', encodeURIComponent(JSON.stringify(iss)))
   params.append('sk', encodeURIComponent(sk))
   wsURL.search = params
-  console.log('wsURL', wsURL)
-
   return JobRequest(JSON.stringify(iss), aud, sk);
-}).then(jr => { // JobRequest {{{2
+}).then(jr => sendJobRequest(jr))
+
+function sendJobRequest (jr, count = 2) { // {{{1
   let context
   const ws = connection(new WebSocket(wsURL)).
     on('error', console.error).
@@ -74,9 +74,13 @@ generate_keypair.call(crypto.subtle).then(keys => { // {{{2
     on('close', data => {
       console.log(configuration.me, 'close data', data)
       put("<h3 style='text-align: center'>Test PASSED</h3>")
+      if (--count > 0) {
+        configuration.attachment.state = State.MATCHING
+        context = Context(ws, configuration.attachment)
+        sendJobRequest(jr, count)
+      }
     }).send(jr)
   context = Context(ws, configuration.attachment)
 
   setInterval(ws.open, 10000)                // auto-reconnect every 10s
-}) // }}}2
-
+}
