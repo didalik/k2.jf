@@ -25,7 +25,7 @@ const State = { // {{{1
         if (event) {
           verifyPayload(event.message).then(payload => {
             console.log(configuration.me, 'context', context, 'payload', payload)
-            out({ message: `${payload.iss.name}:` })
+            out({ message: `- ${payload.iss.name}:` })
             out({ message: payload.sub })
           });
         } else {
@@ -33,7 +33,7 @@ const State = { // {{{1
             setIssuer(context.attachment.iss, context.attachment.sk).sign().
             then(t => {
               context.ws.send(t)
-              out(`${configuration.me}:`)
+              out(`- ${configuration.me}:`)
               out(text2echo)
             })
         }
