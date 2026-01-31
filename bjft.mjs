@@ -1,6 +1,7 @@
 import { // {{{1
   Context,
   JobRequest, configuration, bjft_onmessage, confirmingHandle, matchingHandle,
+  promiseWithResolvers,
 } from '../local/lib/util.mjs' 
 import { put, reset, } from './lib/util.mjs'
 import { JWT, generate_keypair, verifyPayload, } from '../lib/util.mjs'
@@ -54,7 +55,7 @@ put(`Delivered ${location} on ${Date()} to YOUR_IP_ADDRESS`, '<hr/>')
   
 configuration.me = 'Ann' // {{{1
 configuration.State_Running_handle = State.Running.handle
-generate_keypair.call(crypto.subtle).then(keys => { // {{{2
+generate_keypair.call(crypto.subtle).then(keys => {
   const aud = 'bjft/echo'
   const [sk, pk] = keys.split(' ')
   const iss = { name: configuration.me, pk, uuid: 'UUID', }
@@ -64,7 +65,18 @@ generate_keypair.call(crypto.subtle).then(keys => { // {{{2
   params.append('sk', encodeURIComponent(sk))
   wsURL.search = params
   return JobRequest(JSON.stringify(iss), aud, sk);
-}).then(jr => sendJobRequest(jr))
+}).then(jr => {
+  Object.assign(configuration, promiseWithResolvers())
+  sendJobRequest(jr).     // part 1
+    then(_ => {
+      Object.assign(configuration, promiseWithResolvers())
+      configuration.attachment.state = State.MATCHING
+      delete configuration.attachment.match
+      delete configuration.attachment.matchConfirming
+      sendJobRequest(jr). // part 2
+        then(_ => console.log('sendJobRequest DONE'))
+    })
+})
 
 function sendJobRequest (jr, count = 2) { // {{{1
   let context
@@ -76,11 +88,14 @@ function sendJobRequest (jr, count = 2) { // {{{1
       put("<h3 style='text-align: center'>Test PASSED</h3>")
       if (--count > 0) {
         configuration.attachment.state = State.MATCHING
-        context = Context(ws, configuration.attachment)
+        delete configuration.attachment.match
+        delete configuration.attachment.matchConfirming
         sendJobRequest(jr, count)
+      } else {
+        configuration.resolve()
       }
     }).send(jr)
   context = Context(ws, configuration.attachment)
-
-  setInterval(ws.open, 10000)                // auto-reconnect every 10s
+  //setInterval(ws.open, 10000)                // auto-reconnect every 10s
+  return configuration.promise;
 }
