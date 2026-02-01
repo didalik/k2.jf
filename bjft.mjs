@@ -22,10 +22,11 @@ const State = { // {{{1
   MATCHING: 1,
   Running: { // {{{2 
     handle: (context, event) => {
+      console.log(configuration.me, 'Running context', context)
       try {
         if (event) {
           verifyPayload(event.message).then(payload => {
-            console.log(configuration.me, 'context', context, 'payload', payload)
+            console.log('payload', payload)
             out({ message: `- ${payload.iss.name}:` })
             out({ message: payload.sub })
           });
