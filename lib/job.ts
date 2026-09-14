@@ -1,0 +1,199 @@
+// Cloudflare Job Fair client SDK: matches a Job Agent/Requester to a peer over
+// a hibernating WebSocket DO (../../../local/ws), then relays the "Running"
+// phase -- either through a spawned child process (agent mode, e.g.
+// hx/jobs/run.js's Bob/Cyn) or an application-supplied outbox (requester
+// mode, e.g. hx/public/tm.mjs's Demo/IssuerSign) -- as an AsyncGenerator of
+// JobEvents.
+//
+// Base pattern: ../../../../Termux-Dev's src/providers/*.ts `async *chatStream`
+// (wraps a callback/event API in an async generator yielding a typed union,
+// with a final return value) and src/core/loop.ts's `async *run` (consumes
+// that generator with `for await`, re-yielding its own higher-level events).
+// Here the "chunks" are WebSocket/child-process occurrences instead of LLM
+// stream deltas, bridged onto one queue via lib/util.mjs's Channel. {{{1
+
+import { Channel } from '../../../lib/util.mjs'
+import { JWT, verifyPayload } from './sdk.js'
+import { State } from './types.ts'
+import type {
+  Actor, Attachment, ChildProcessLike, JobEvent, JobOffer, JobResult,
+  VerifiedPayload, WebSocketLike,
+} from './types.ts'
+
+type Internal = // {{{1
+  | { kind: 'ws-open' }
+  | { kind: 'ws-message'; data: string }
+  | { kind: 'ws-close'; data?: unknown }
+  | { kind: 'ws-error'; error: unknown }
+  | { kind: 'outbound'; line: string }
+  | { kind: 'child-stdout'; data: string }
+  | { kind: 'child-stderr'; data: string }
+  | { kind: 'child-close'; code: number | null }
+  | { kind: 'child-error'; error: unknown }
+
+interface InternalChannel { // {{{1
+  send (item: Internal): Promise<unknown>
+  receive (): Promise<Internal>
+}
+
+const isBrowser = () => typeof (globalThis as any).global === 'undefined' // {{{1
+
+function bridgeWs ( // {{{1
+  ws: WebSocketLike, browser: boolean, channel: InternalChannel, onOpen: () => void
+) {
+  const open = () => { onOpen(); channel.send({ kind: 'ws-open' }) }
+  const onmessage = (arg: any) => channel.send({
+    kind: 'ws-message', data: browser ? arg.data : arg.toString(),
+  })
+  const onclose = (data: unknown) => channel.send({ kind: 'ws-close', data })
+  const onerror = (error: unknown) => channel.send({ kind: 'ws-error', error })
+  if (browser) {
+    ws.onopen = open; ws.onmessage = onmessage; ws.onclose = onclose; ws.onerror = onerror
+  } else { // Node "ws" package
+    ws.on!('open', open); ws.on!('message', onmessage); ws.on!('close', onclose); ws.on!('error', onerror)
+  }
+  if (ws.readyState === 1) open() // already open (e.g. a test/mock WebSocket)
+}
+
+function bridgeChild (child: ChildProcessLike, channel: InternalChannel) { // {{{1
+  child.on('error', error => channel.send({ kind: 'child-error', error }))
+  child.on('close', code => channel.send({ kind: 'child-close', code }))
+  child.stdout.on('data', data => channel.send({ kind: 'child-stdout', data: data.toString() }))
+  child.stderr.on('data', data => channel.send({ kind: 'child-stderr', data: data.toString() }))
+}
+
+async function pumpOutbox ( // fire-and-forget: feeds 'outbound' until the ws closes {{{1
+  outbox: { receive (): Promise<string> }, channel: InternalChannel
+) {
+  while (true) {
+    channel.send({ kind: 'outbound', line: await outbox.receive() })
+  }
+}
+
+/** Runs one job: signs a handshake JWT, opens the WebSocket, waits to be
+ * matched, then relays the Running phase until the peer closes. Yields
+ * JobEvents as they occur; returns the final JobResult on close. {{{1 */
+export async function* job (
+  actor: Actor, offer: JobOffer
+): AsyncGenerator<JobEvent, JobResult, void> {
+  const browser = isBrowser()
+  const label = offer.label ?? offer.aud
+  const channel = new Channel() as unknown as InternalChannel
+
+  const wsURL = new URL(actor.wsArgs[0] as string)
+  const params = new URLSearchParams(`iss=${encodeURIComponent(JSON.stringify(actor.iss))}`)
+  params.append('aud', encodeURIComponent(offer.aud))
+  wsURL.search = params.toString()
+
+  const attachment: Attachment = { iss: actor.iss, sk: actor.sk, state: State.MATCHING }
+  const sign = (jwt: JWT): Promise<string> => jwt.sign() as unknown as Promise<string>
+  const relay = (sub: string): Promise<string> =>
+    sign(new JWT(sub).setIssuer(attachment.iss, attachment.sk))
+
+  const handshake: string = await sign(
+    new JWT(actor.app).setIssuer(actor.iss, actor.sk).setAudience(offer.aud)
+  )
+  const ws: WebSocketLike = new actor.WebSocket(wsURL, actor.wsArgs[1])
+  bridgeWs(ws, browser, channel, () => ws.send(JSON.stringify(handshake)))
+
+  let child: ChildProcessLike | undefined
+
+  while (true) {
+    const event = await channel.receive()
+    switch (event.kind) {
+      case 'ws-open':
+        yield { type: 'open' }
+        break;
+
+      case 'ws-error':
+        yield { type: 'error', error: event.error }
+        break;
+
+      case 'ws-close':
+        child?.stdin.end()
+        return { message: `- ${actor.iss.name}: ${label} DONE` };
+
+      case 'child-error':
+        console.error(`${offer.aud}  pipe2child  E R R O R  ${event.error}`)
+        break;
+
+      case 'child-stderr':
+        console.log(`${offer.aud} stderr`, event.data)
+        break;
+
+      case 'child-stdout':
+        channel.send({ kind: 'outbound', line: event.data })
+        break;
+
+      case 'child-close':
+        channel.send({ kind: 'outbound', line: `${offer.aud} EXIT CODE ${event.code}` })
+        ws.close()
+        break;
+
+      case 'outbound':
+        ws.send(JSON.stringify(await relay(event.line)))
+        yield { type: 'output', line: event.line }
+        break;
+
+      case 'ws-message': { // {{{2
+        // The DO relays { message } as JSON text (mirrors the old connection()
+        // wrapper's JSON.stringify(send)/JSON.parse(receive) pair).
+        const raw = JSON.parse(event.data).message
+        const payload = await verifyPayload(raw) as VerifiedPayload | null
+        if (!payload) { console.error('Payload NOT VERIFIED'); break; }
+
+        if (attachment.state === State.MATCHING) {
+          attachment.state = State.RUNNING
+          attachment.match = payload
+          yield { type: 'matched', payload }
+
+          if (offer.spawn) {
+            child = offer.spawn('make', [], { cwd: `./${offer.aud}` })
+            bridgeChild(child, channel)
+            yield { type: 'spawned' }
+            if (offer.prefix) {
+              child.stdin.write(offer.prefix(attachment))
+              if (!offer.indataEOD) child.stdin.end()
+            }
+          } else if (offer.outbox) {
+            pumpOutbox(offer.outbox, channel)
+          }
+          break;
+        }
+
+        // State.RUNNING
+        if (offer.spawn) {
+          child?.stdin.write(payload.sub)
+          if (offer.indataEOD && payload.sub === 'context.job.stdin.end()') child?.stdin.end()
+        } else {
+          yield { type: 'message', payload }
+        }
+        break;
+      } // }}}2
+    }
+  }
+}
+
+/** One AsyncGenerator per offer, running concurrently. {{{1 */
+export function jobs (
+  actor: Actor, offers: JobOffer[]
+): AsyncGenerator<JobEvent, JobResult, void>[] {
+  return offers.map(offer => job(actor, offer));
+}
+
+/** Drains one job(), forwarding each JobEvent to offer.onEvent as it occurs.
+ * A drop-in replacement for the old Job()'s Promise<JobResult.message>. {{{1 */
+export async function runJob (actor: Actor, offer: JobOffer): Promise<string> {
+  const gen = job(actor, offer)
+  let step = await gen.next()
+  while (!step.done) {
+    offer.onEvent?.(step.value as JobEvent)
+    step = await gen.next()
+  }
+  return step.value.message;
+}
+
+/** A drop-in replacement for the old Jobs(): one Promise<string> per offer. {{{1 */
+export function runJobs (actor: Actor, offers: JobOffer[]): Promise<string>[] {
+  return offers.map(offer => runJob(actor, offer));
+}
