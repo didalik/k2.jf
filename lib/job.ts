@@ -1,4 +1,4 @@
-// Cloudflare Job Fair client SDK: matches a Job Agent/Requester to a peer over
+// Cloudflare Job Fair client SDK: matches a Job Agent/Requester to a peer over {{{1
 // a hibernating WebSocket DO (../../../local/ws), then relays the "Running"
 // phase -- either through a spawned child process (agent mode, e.g.
 // hx/jobs/run.js's Bob/Cyn) or an application-supplied outbox (requester
@@ -10,9 +10,9 @@
 // with a final return value) and src/core/loop.ts's `async *run` (consumes
 // that generator with `for await`, re-yielding its own higher-level events).
 // Here the "chunks" are WebSocket/child-process occurrences instead of LLM
-// stream deltas, bridged onto one queue via lib/util.mjs's Channel. {{{1
+// stream deltas, bridged onto one queue via lib/util.mjs's Channel.
 
-import { Channel } from '../../../lib/util.mjs'
+import { Channel } from '../../../lib/util.mjs' // {{{1
 import { JWT, verifyPayload } from './sdk.js'
 import { State } from './types.ts'
 import type {
@@ -70,9 +70,9 @@ async function pumpOutbox ( // fire-and-forget: feeds 'outbound' until the ws cl
   }
 }
 
-/** Runs one job: signs a handshake JWT, opens the WebSocket, waits to be
+/** Runs one job: signs a handshake JWT, opens the WebSocket, waits to be {{{1
  * matched, then relays the Running phase until the peer closes. Yields
- * JobEvents as they occur; returns the final JobResult on close. {{{1 */
+ * JobEvents as they occur; returns the final JobResult on close. */
 export async function* job (
   actor: Actor, offer: JobOffer
 ): AsyncGenerator<JobEvent, JobResult, void> {
@@ -101,36 +101,36 @@ export async function* job (
   while (true) {
     const event = await channel.receive()
     switch (event.kind) {
-      case 'ws-open':
+      case 'ws-open': // {{{2
         yield { type: 'open' }
         break;
 
-      case 'ws-error':
+      case 'ws-error': // {{{2
         yield { type: 'error', error: event.error }
         break;
 
-      case 'ws-close':
+      case 'ws-close': // {{{2
         child?.stdin.end()
         return { message: `- ${actor.iss.name}: ${label} DONE` };
 
-      case 'child-error':
+      case 'child-error': // {{{2
         console.error(`${offer.aud}  pipe2child  E R R O R  ${event.error}`)
         break;
 
-      case 'child-stderr':
+      case 'child-stderr': // {{{2
         console.log(`${offer.aud} stderr`, event.data)
         break;
 
-      case 'child-stdout':
+      case 'child-stdout': // {{{2
         channel.send({ kind: 'outbound', line: event.data })
         break;
 
-      case 'child-close':
+      case 'child-close': // {{{2
         channel.send({ kind: 'outbound', line: `${offer.aud} EXIT CODE ${event.code}` })
         ws.close()
         break;
 
-      case 'outbound':
+      case 'outbound': // {{{2
         ws.send(JSON.stringify(await relay(event.line)))
         yield { type: 'output', line: event.line }
         break;
@@ -163,6 +163,8 @@ export async function* job (
 
         // State.RUNNING
         if (offer.spawn) {
+          //console.log('ws-message offer', offer, 'payload.sub', payload.sub)
+
           child?.stdin.write(payload.sub)
           if (offer.indataEOD && payload.sub === 'context.job.stdin.end()') child?.stdin.end()
         } else {
