@@ -136,16 +136,19 @@ export async function* job (
         break;
 
       case 'ws-message': { // {{{2
-        // The DO relays { message } as JSON text (mirrors the old connection()
-        // wrapper's JSON.stringify(send)/JSON.parse(receive) pair).
-        const raw = JSON.parse(event.data).message
-        const payload = await verifyPayload(raw) as VerifiedPayload | null
+        // The DO relays { message, connectingIp } as JSON text (mirrors the old
+        // connection() wrapper's JSON.stringify(send)/JSON.parse(receive) pair).
+        // connectingIp is Cloudflare-observed on the peer's own WS upgrade, not
+        // self-reported -- see local/ws/src/wsfsm.ts's Behavior.Matching.handle.
+        const parsed = JSON.parse(event.data)
+        const payload = await verifyPayload(parsed.message) as VerifiedPayload | null
         if (!payload) { console.error('Payload NOT VERIFIED'); break; }
 
         if (attachment.state === State.MATCHING) {
           attachment.state = State.RUNNING
           attachment.match = payload
-          yield { type: 'matched', payload }
+          attachment.connectingIp = parsed.connectingIp
+          yield { type: 'matched', payload, connectingIp: parsed.connectingIp }
 
           if (offer.spawn) {
             child = offer.spawn('make', [], { cwd: `./${offer.aud}` })

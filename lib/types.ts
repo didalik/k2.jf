@@ -32,6 +32,10 @@ export interface Attachment { // {{{1
   sk: string
   state: State
   match?: VerifiedPayload
+  /** The matched peer's CF-Connecting-IP, relayed by local/ws (Cloudflare-observed
+   * on their WS upgrade, not self-reported) -- undefined for FSMs/versions of
+   * local/ws that don't relay it. */
+  connectingIp?: string
 }
 
 /** Minimal surface job() needs from a WebSocket, whether it's a browser
@@ -90,7 +94,7 @@ export interface JobOffer {
 /** Events job() yields as the WebSocket lifecycle progresses. {{{1 */
 export type JobEvent =
   | { type: 'open' }
-  | { type: 'matched'; payload: VerifiedPayload }
+  | { type: 'matched'; payload: VerifiedPayload; connectingIp?: string }
   | { type: 'message'; payload: VerifiedPayload }  // requester mode: one per Running-phase inbound message
   | { type: 'spawned' }
   | { type: 'output'; line: string }               // a signed line sent back over the WebSocket
