@@ -68,7 +68,7 @@ export interface ChildProcessLike { // {{{1
 }
 
 export type SpawnFn = ( // {{{1
-  command: string, args: string[], options: { cwd: string }
+  command: string, args: string[], options: { cwd: string; env?: Record<string, string | undefined> }
 ) => ChildProcessLike
 
 /** Something job() can pull outbound (to-be-signed-and-sent) lines from, in

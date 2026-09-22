@@ -151,7 +151,20 @@ export async function* job (
           yield { type: 'matched', payload, connectingIp: parsed.connectingIp }
 
           if (offer.spawn) {
-            child = offer.spawn('make', [], { cwd: `./${offer.aud}` })
+            // Strip MAKELEVEL/MAKEFLAGS: when this agent process was itself
+            // launched via `make` (the norm -- see CLAUDE.md's `make jobs`/
+            // `make agent`), GNU Make exports both into every child's env,
+            // so this spawned `make` sees itself as a sub-make and prints
+            // "Entering/Leaving directory" noise on stdout -- which
+            // bridgeChild below relays as if it were real job output,
+            // corrupting the first message the Requester/peer receives.
+            let env: Record<string, string | undefined> | undefined
+            if (!browser) {
+              env = { ...(globalThis as any).process.env }
+              delete env.MAKELEVEL
+              delete env.MAKEFLAGS
+            }
+            child = offer.spawn('make', [], { cwd: `./${offer.aud}`, env })
             bridgeChild(child, channel)
             yield { type: 'spawned' }
             if (offer.prefix) {
