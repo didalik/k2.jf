@@ -1,5 +1,5 @@
 // Cloudflare Job Fair client SDK: matches a Job Agent/Requester to a peer over {{{1
-// a hibernating WebSocket DO (../../../local/ws), then relays the "Running"
+// a hibernating WebSocket DO (../../../local/ws), then relays the "Relay"
 // phase -- either through a spawned child process (agent mode, e.g.
 // hx/jobs/run.js's Bob/Cyn) or an application-supplied outbox (requester
 // mode, e.g. hx/public/tm.mjs's Demo/IssuerSign) -- as an AsyncGenerator of
@@ -71,7 +71,7 @@ async function pumpOutbox ( // fire-and-forget: feeds 'outbound' until the ws cl
 }
 
 /** Runs one job: signs a handshake JWT, opens the WebSocket, waits to be {{{1
- * matched, then relays the Running phase until the peer closes. Yields
+ * matched, then relays the Relay phase until the peer closes. Yields
  * JobEvents as they occur; returns the final JobResult on close. */
 export async function* job (
   actor: Actor, offer: JobOffer
@@ -85,7 +85,7 @@ export async function* job (
   params.append('aud', encodeURIComponent(offer.aud))
   wsURL.search = params.toString()
 
-  const attachment: Attachment = { iss: actor.iss, sk: actor.sk, state: State.MATCHING }
+  const attachment: Attachment = { iss: actor.iss, sk: actor.sk, state: State.MATCH }
   const sign = (jwt: JWT): Promise<string> => jwt.sign() as unknown as Promise<string>
   const relay = (sub: string): Promise<string> =>
     sign(new JWT(sub).setIssuer(attachment.iss, attachment.sk))
@@ -139,13 +139,13 @@ export async function* job (
         // The DO relays { message, connectingIp } as JSON text (mirrors the old
         // connection() wrapper's JSON.stringify(send)/JSON.parse(receive) pair).
         // connectingIp is Cloudflare-observed on the peer's own WS upgrade, not
-        // self-reported -- see local/ws/src/wsfsm.ts's Behavior.Matching.handle.
+        // self-reported -- see local/ws/src/wsfsm.ts's Behavior.Match.handle.
         const parsed = JSON.parse(event.data)
         const payload = await verifyPayload(parsed.message) as VerifiedPayload | null
         if (!payload) { console.error('Payload NOT VERIFIED'); break; }
 
-        if (attachment.state === State.MATCHING) {
-          attachment.state = State.RUNNING
+        if (attachment.state === State.MATCH) {
+          attachment.state = State.RELAY
           attachment.match = payload
           attachment.connectingIp = parsed.connectingIp
           yield { type: 'matched', payload, connectingIp: parsed.connectingIp }
@@ -177,7 +177,7 @@ export async function* job (
           break;
         }
 
-        // State.RUNNING
+        // State.RELAY
         if (offer.spawn) {
           //console.log('ws-message offer', offer, 'payload.sub', payload.sub)
 

@@ -7,7 +7,7 @@
 // itself and how it's modeled on Termux-Dev's src/providers/*.ts
 // `async *chatStream` + src/core/loop.ts `async *run` pair.
 
-export const State = { MATCHING: 1, RUNNING: 2 } as const // {{{1
+export const State = { MATCH: 1, RELAY: 2 } as const // {{{1
 export type State = typeof State[keyof typeof State]
 
 export interface Issuer { // {{{1
@@ -86,7 +86,7 @@ export interface JobOffer {
   label?: string             // defaults to aud; used to build JobResult.message
   indataEOD?: boolean        // agent mode: keep stdin open for the 'context.job.stdin.end()' sentinel
   prefix?: (attachment: Attachment) => string    // agent mode only
-  spawn?: SpawnFn             // agent mode: pipe the Running phase through a child process
+  spawn?: SpawnFn             // agent mode: pipe the Relay phase through a child process
   outbox?: OutboxLike         // requester mode: pull outbound lines from here instead
   onEvent?: (event: JobEvent) => void            // observe events without driving the generator directly
 }
@@ -95,7 +95,7 @@ export interface JobOffer {
 export type JobEvent =
   | { type: 'open' }
   | { type: 'matched'; payload: VerifiedPayload; connectingIp?: string }
-  | { type: 'message'; payload: VerifiedPayload }  // requester mode: one per Running-phase inbound message
+  | { type: 'message'; payload: VerifiedPayload }  // requester mode: one per Relay-phase inbound message
   | { type: 'spawned' }
   | { type: 'output'; line: string }               // a signed line sent back over the WebSocket
   | { type: 'error'; error: unknown }
